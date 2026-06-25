@@ -1,0 +1,33 @@
+[project]
+name = "egis-agent-studio"
+version = "0.1.0"
+description = "EGIS 智能体平台管理界面后端 —— 可独立部署，也可被业务 agent 项目按需挂载"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "asyncpg>=0.30.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
+]
+
+# ── 本地开发 vs 生产 ───────────────────────────────────
+# 本地开发：宿主项目通过 [tool.uv.sources] path 引入 editable 版本
+# 生产部署：uv build 打包 whl，pip install 从 PyPI / 私有 registry 安装
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/egis_agent_studio"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"frontend/dist" = "egis_agent_studio/frontend/dist"

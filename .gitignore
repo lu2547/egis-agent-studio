@@ -1,0 +1,9 @@
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+.env
+.DS_Store
+data/chats/
