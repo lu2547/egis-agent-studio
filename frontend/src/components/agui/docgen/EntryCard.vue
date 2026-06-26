@@ -18,7 +18,8 @@ interface PlanOption {
   title: string
   tag: string
   desc: string
-  message: string
+  display: string
+  event: Record<string, any>
 }
 
 const emit = defineEmits<{
@@ -65,21 +66,24 @@ const planMap: Record<string, PlanOption[]> = {
       title: '标书',
       tag: 'word',
       desc: '上传招标材料 → AI 解析 → 生成投标材料',
-      message: '我选择标书 [word] 标化制作',
+      display: '我选择标书',
+      event: { flow: 'docgen_entry_flow', action: 'select_template', template_id: 'tender' },
     },
     {
       id: 'pension',
       title: '平安养老险优势介绍',
       tag: 'word',
       desc: '基于知识库自动生成优势介绍材料',
-      message: '我选择平安养老险优势介绍 [word] 标化制作',
+      display: '我选择平安养老险优势介绍',
+      event: { flow: 'docgen_entry_flow', action: 'select_template', template_id: 'pension_intro' },
     },
     {
       id: 'investment',
       title: '投资报告',
       tag: 'word',
       desc: '投资报告标化模板',
-      message: '我选择投资报告 [word] 标化制作',
+      display: '我选择投资报告',
+      event: { flow: 'docgen_entry_flow', action: 'select_template', template_id: 'investment_report' },
     },
   ],
   ai: [
@@ -88,14 +92,16 @@ const planMap: Record<string, PlanOption[]> = {
       title: 'Word 文档',
       tag: 'AI',
       desc: 'AI 生成大纲 → 编辑 → 生成 Word',
-      message: '我选择 AI 制作 Word 文档',
+      display: '我选择 AI 制作 Word 文档',
+      event: { flow: 'docgen_entry_flow', action: 'select_template', template_id: 'ai_word' },
     },
     {
       id: 'ppt',
       title: 'PPT 演示文稿',
       tag: 'AI',
       desc: 'AI 生成大纲 → 编辑 → 生成 PPT',
-      message: '我选择 AI 制作 PPT 演示文稿',
+      display: '我选择 AI 制作 PPT 演示文稿',
+      event: { flow: 'docgen_entry_flow', action: 'select_template', template_id: 'ai_ppt' },
     },
   ],
 }
@@ -138,7 +144,13 @@ function togglePlan(planId: string) {
 function confirmSelection() {
   if (!selectedPlanOption.value || isConfirmed.value) return
   isConfirmed.value = true
-  emit('action', { type: 'sendMessage', args: selectedPlanOption.value.message })
+  emit('action', {
+    type: 'docgenEvent',
+    args: JSON.stringify({
+      event: selectedPlanOption.value.event,
+      display: selectedPlanOption.value.display,
+    }),
+  })
 }
 </script>
 

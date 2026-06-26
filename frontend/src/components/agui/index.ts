@@ -57,6 +57,7 @@ export {
   DocgenEntryCard,
   PensionIntroCard,
   DocxEditorDrawer,
+  DocxDeliveryCard,
   InvestmentReportDrawer,
   isDocgenUploadPayload,
   isDocgenEditorPayload,

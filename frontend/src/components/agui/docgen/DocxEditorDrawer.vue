@@ -8,6 +8,7 @@ const props = defineProps<{
   visible: boolean
   docxUrl: string
   title?: string
+  confirmed?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -150,7 +151,7 @@ function onConfirmDone() {
         <t-icon name="download" />
         {{ downloading ? '下载中…' : '下载文档' }}
       </t-button>
-      <t-button theme="primary" @click="onConfirmDone">
+      <t-button v-if="!props.confirmed" theme="primary" @click="onConfirmDone">
         <t-icon name="check" /> 确认完成
       </t-button>
     </div>

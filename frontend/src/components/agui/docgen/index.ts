@@ -6,6 +6,7 @@
  * - EntryCard.vue           统一入口卡片（Step1 选方式 + Step2 选方案）
  * - PensionIntroCard.vue    养老险优势介绍模板选择卡片
  * - DocxEditorDrawer.vue    docx-editor 右侧抽屉（养老险流程专用）
+ * - DocxDeliveryCard.vue    文档交付完成后的打开/下载卡片
  * - InvestmentReportDrawer.vue 投资报告标化模板预留抽屉
  *
  * 这些组件检测 A2UI payload 中的自定义组件类型（FileUpload / DocgenEditor）。
@@ -17,6 +18,7 @@ export { default as DocgenWordEditorCard } from './WordEditorCard.vue'
 export { default as DocgenEntryCard } from './EntryCard.vue'
 export { default as PensionIntroCard } from './PensionIntroCard.vue'
 export { default as DocxEditorDrawer } from './DocxEditorDrawer.vue'
+export { default as DocxDeliveryCard } from './DocxDeliveryCard.vue'
 export { default as InvestmentReportDrawer } from './InvestmentReportDrawer.vue'
 
 /** 检测 A2UI payload 是否包含 DocGen 自定义组件 */

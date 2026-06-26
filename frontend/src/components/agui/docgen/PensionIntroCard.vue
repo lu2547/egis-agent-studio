@@ -40,9 +40,18 @@ function toggleVersion(vid: string) {
 function confirmSelection() {
   if (!selectedOption.value || isConfirmed.value) return
   isConfirmed.value = true
+  const event = {
+    flow: 'docgen_pension_intro_flow',
+    action: 'generate',
+    template_id: 'pension_intro',
+    version: selectedOption.value.id,
+  }
   emit('action', {
-    type: 'sendMessage',
-    args: `我选择平安养老险优势介绍${selectedOption.value.label}，version=${selectedOption.value.id}。请直接生成该版本并打开文档抽屉。`,
+    type: 'docgenEvent',
+    args: JSON.stringify({
+      event,
+      display: `我选择${selectedOption.value.label}`,
+    }),
   })
 }
 </script>

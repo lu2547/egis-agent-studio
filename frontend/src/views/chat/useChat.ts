@@ -79,6 +79,9 @@ export function useChat(opts: UseChatOptions) {
                 todoCard: m.todoCard || null,
                 outlineCard: m.outlineCard || null,
                 entryCard: m.entryCard || null,
+                pensionIntroCard: m.pensionIntroCard || null,
+                docxDrawer: m.docxDrawer || null,
+                investmentReportDrawer: m.investmentReportDrawer || null,
                 isStreaming: false,
                 elapsed: m.elapsed || 0,
             }))
@@ -123,11 +126,14 @@ export function useChat(opts: UseChatOptions) {
 
     // === 发送消息 ===
 
-    async function sendMessage() {
-        if (!inputValue.value.trim() || isLoading.value) return
+    async function sendMessage(messageOverride?: string, extraContext?: Record<string, any>) {
+        const outgoing = typeof messageOverride === 'string' ? messageOverride : inputValue.value
+        if (!outgoing.trim() || isLoading.value) return
 
-        const query = inputValue.value
-        inputValue.value = ''
+        const query = outgoing
+        if (typeof messageOverride !== 'string') {
+            inputValue.value = ''
+        }
         isLoading.value = true
 
         // 确保有 chatId，显式捕获避免长流结束后 computed 失效
@@ -143,7 +149,7 @@ export function useChat(opts: UseChatOptions) {
             } catch (err) {
                 console.error('create chat failed:', err)
                 isLoading.value = false
-                inputValue.value = query
+                inputValue.value = typeof messageOverride === 'string' ? '' : query
                 return
             }
         }
@@ -180,6 +186,7 @@ export function useChat(opts: UseChatOptions) {
                 user_id: 'studio-user',
                 context: {
                     run_mode: runMode.value,
+                    ...(extraContext || {}),
                 },
             }
             if (ragChanged) {
@@ -274,7 +281,11 @@ export function useChat(opts: UseChatOptions) {
                 body: JSON.stringify({ message: userMsg }),
             })
             const amsg = messages.value[assistantIdx]
-            if (assistantMsg || amsg?.reasoning || amsg?.todoCard || amsg?.outlineCard || amsg?.entryCard) {
+            if (
+                assistantMsg || amsg?.reasoning || amsg?.todoCard || amsg?.outlineCard ||
+                amsg?.entryCard || amsg?.pensionIntroCard || amsg?.docxDrawer ||
+                amsg?.investmentReportDrawer
+            ) {
                 await fetch(`/api/studio/chats/${chatId}/messages`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -285,6 +296,9 @@ export function useChat(opts: UseChatOptions) {
                         todoCard: amsg?.todoCard || null,
                         outlineCard: amsg?.outlineCard || null,
                         entryCard: amsg?.entryCard || null,
+                        pensionIntroCard: amsg?.pensionIntroCard || null,
+                        docxDrawer: amsg?.docxDrawer || null,
+                        investmentReportDrawer: amsg?.investmentReportDrawer || null,
                         elapsed: amsg?.elapsed || 0,
                     }),
                 })

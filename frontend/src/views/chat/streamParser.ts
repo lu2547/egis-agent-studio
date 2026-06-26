@@ -6,6 +6,7 @@ import { appendSvgPage, finalizeTodoCard } from '@/components/agui'
  * 仅识别 3 种事件：
  *   - custom (custom_type=frontend_digest, tool_name ∈ 白名单) → todo_write 卡片
  *   - custom (custom_type=svg_preview)                             → SVG 实时预览页（msg.svgPages）
+ *   - docgen_progress                                              → 材料制作分段进度
  *   - text_message_content                                          → 追加 delta 到 msg.reasoning（推理区）
  *   - run_finished                                                  → 最终答案
  *
@@ -53,6 +54,8 @@ export function handleSSEEvent(d: any, ctx: StreamContext): void {
 
     if (evt === 'custom') {
         handleCustomEvent(d, msg, ctx)
+    } else if (evt === 'docgen_progress') {
+        handleDocgenProgress(d, msg, ctx)
     } else if (evt === 'text_message_content' && d.content_kind === 'a2ui' && d.custom_data) {
         // A2UI 卡片事件（必须在普通 text_message_content 之前拦截）
         if (!Array.isArray(msg.a2uiCards)) msg.a2uiCards = []
@@ -79,6 +82,28 @@ export function handleSSEEvent(d: any, ctx: StreamContext): void {
 }
 
 // ====== 内部 handler ======
+
+function handleDocgenProgress(d: any, msg: any, ctx: StreamContext): void {
+    if (d.flow !== 'docgen_pension_intro_flow') return
+    if (!Array.isArray(msg.docgenProgress)) msg.docgenProgress = []
+    const current = Number(d.current || 0)
+    const total = Number(d.total || 0)
+    const sectionTitle = String(d.section_title || '')
+    const item = {
+        stage: d.stage || 'section_done',
+        current,
+        total,
+        sectionTitle,
+        message: d.message || (sectionTitle ? `已完成：${sectionTitle}` : '已完成一个段落'),
+    }
+    const idx = msg.docgenProgress.findIndex((p: any) => p.current === current && p.sectionTitle === sectionTitle)
+    if (idx >= 0) {
+        msg.docgenProgress[idx] = item
+    } else {
+        msg.docgenProgress.push(item)
+    }
+    ctx.onScroll?.()
+}
 
 function handleCustomEvent(d: any, msg: any, ctx: StreamContext): void {
     // SVG 实时预览：生成期间每写一张 SVG 推一条，原地累加到 msg.svgPages
@@ -109,6 +134,8 @@ function handleCustomEvent(d: any, msg: any, ctx: StreamContext): void {
         if (payload.action === 'select_template') {
             msg.pensionIntroCard = payload
         } else if (payload.action === 'show_docx') {
+            msg.docxDrawer = payload
+        } else if (payload.action === 'delivered') {
             msg.docxDrawer = payload
         }
     } else if (payload.tool_name === 'docgen_investment_report_flow') {

@@ -80,6 +80,26 @@
                 @action="onA2UIAction"
               />
 
+              <!-- ④.6.5 材料制作分段进度 -->
+              <div v-if="msg.docgenProgress && msg.docgenProgress.length" class="docgen-progress">
+                <div class="docgen-progress-title">材料生成进度</div>
+                <div
+                  v-for="(item, pIdx) in msg.docgenProgress"
+                  :key="'docgen-progress-' + pIdx"
+                  class="docgen-progress-item"
+                >
+                  <span class="docgen-progress-dot">✓</span>
+                  <span>{{ item.message }}</span>
+                </div>
+              </div>
+
+              <!-- ④.7 文档交付完成卡片（可重新打开/下载文档） -->
+              <DocxDeliveryCard
+                v-if="msg.docxDrawer && msg.docxDrawer.action === 'delivered'"
+                :payload="msg.docxDrawer"
+                @action="onA2UIAction"
+              />
+
               <!-- ⑤ SVG 实时预览（生成期间逐页推送） -->
               <SvgPreview
                 v-if="msg.svgPages && msg.svgPages.length"
@@ -171,6 +191,7 @@
       :visible="docxDrawerVisible"
       :docx-url="docxDrawerUrl"
       :title="docxDrawerTitle"
+      :confirmed="docxDrawerConfirmed"
       @update:visible="(v: boolean) => (docxDrawerVisible = v)"
       @action="onA2UIAction"
     />
@@ -187,7 +208,7 @@
 <script setup lang="ts">
 import { onMounted, watch, ref } from 'vue'
 import { hasContent, hasReasoning } from './messageHelpers'
-import { isTodoCard, TodoCard, A2UICard, ThinkingCard, OutlineCard, SvgPreview, PPTistDrawer, DocgenUploadCard, DocgenWordEditorCard, DocgenEntryCard, PensionIntroCard, DocxEditorDrawer, InvestmentReportDrawer, isDocgenUploadPayload, isDocgenEditorPayload } from '@/components/agui'
+import { isTodoCard, TodoCard, A2UICard, ThinkingCard, OutlineCard, SvgPreview, PPTistDrawer, DocgenUploadCard, DocgenWordEditorCard, DocgenEntryCard, PensionIntroCard, DocxEditorDrawer, DocxDeliveryCard, InvestmentReportDrawer, isDocgenUploadPayload, isDocgenEditorPayload } from '@/components/agui'
 import { useRag } from './useRag'
 import { useChat } from './useChat'
 import { useReferences } from './useReferences'
@@ -240,6 +261,31 @@ function onA2UIAction({ type, args }: { type: string; args: string }) {
     }
     return
   }
+  if (type === 'docgenEvent') {
+    try {
+      const payload = JSON.parse(args || '{}')
+      const event = payload.event || {}
+      const display = payload.display || '我已选择'
+      sendMessage(display, { docgen_event: event })
+    } catch (err) {
+      console.warn('[ChatView] invalid docgenEvent action:', err, args)
+    }
+    return
+  }
+  if (type === 'openDocxDrawer') {
+    try {
+      const payload = JSON.parse(args || '{}')
+      const url = payload.docx_url || payload.docxUrl || ''
+      if (!url) return
+      docxDrawerUrl.value = url
+      docxDrawerTitle.value = payload.title || '文档查看'
+      docxDrawerConfirmed.value = !!payload.confirmed
+      docxDrawerVisible.value = true
+    } catch (err) {
+      console.warn('[ChatView] invalid openDocxDrawer action:', err, args)
+    }
+    return
+  }
   console.warn('[ChatView] unsupported a2ui action type:', type)
 }
 
@@ -280,6 +326,7 @@ function onPPTistMessage(msg: any) {
 const docxDrawerVisible = ref(false)
 const docxDrawerUrl = ref('')
 const docxDrawerTitle = ref('')
+const docxDrawerConfirmed = ref(false)
 const investmentReportDrawerVisible = ref(false)
 const investmentReportDrawerTitle = ref('投资报告')
 const investmentReportDrawerEventId = ref('')
@@ -296,6 +343,7 @@ watch(
         if (url && url !== docxDrawerUrl.value) {
           docxDrawerUrl.value = url
           docxDrawerTitle.value = m.docxDrawer.title || '平安养老险优势介绍'
+          docxDrawerConfirmed.value = false
           docxDrawerVisible.value = true
         }
         break
@@ -382,6 +430,10 @@ onMounted(async () => {
 
 /* 可编辑大纲卡片容器 */
 .outline-card-wrap { margin: 8px 0; }
+.docgen-progress { margin: 10px 0; padding: 12px 14px; background: #fff; border: 1px solid #d9e8ff; border-radius: 8px; color: #334155; }
+.docgen-progress-title { font-size: 13px; font-weight: 600; color: #0052d9; margin-bottom: 8px; }
+.docgen-progress-item { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 1.6; }
+.docgen-progress-dot { color: #00a870; font-weight: 700; }
 
 /* Streaming */
 .streaming-indicator { display: inline-flex; gap: 4px; padding: 10px 12px; }
