@@ -84,6 +84,7 @@ export interface RAGFile {
     file_name: string
     file_type: string
     knowledge_base_id: string
+    tag_id: string
     created_at: string
 }
 

@@ -125,17 +125,18 @@
 
       <!-- 输入框 -->
       <div class="input-area">
-        <div v-if="agentUsesRag" class="rag-selector-row">
-          <t-select v-model="ragState.knowledge_base_ids" multiple filterable clearable placeholder="选知识库" style="flex: 1; min-width: 200px" :loading="kbLoading" :popup-props="selectPopupProps" @search="onKbSearch" @change="onKbChange">
-            <t-option v-for="kb in kbOptions" :key="kb.id" :value="kb.id" :label="kb.name">
-              <span class="kb-option">
-                <span class="kb-option-name">{{ kb.name }}</span>
-                <span class="kb-option-tag" :class="`kb-cat-${kb.category || 'unknown'}`">{{ kbCategoryLabel(kb.category) }}</span>
-              </span>
-            </t-option>
-          </t-select>
-          <t-select v-model="ragState.tag_ids" :options="tagOptions" :keys="{ value: 'id', label: 'name' }" multiple filterable clearable placeholder="选标签（限选中知识库内）" style="flex: 1; min-width: 200px" :loading="tagLoading" :disabled="ragState.knowledge_base_ids.length === 0" :popup-props="selectPopupProps" />
-          <t-select v-model="ragState.file_ids" :options="fileOptions" :keys="{ value: 'id', label: 'title' }" multiple filterable clearable :filter="filterFileLocal" placeholder="输入关键词搜索文档" style="flex: 1; min-width: 200px" :loading="fileLoading" :popup-props="selectPopupProps" @search="onFileSearch" />
+        <div v-if="agentUsesRag" class="rag-scope-bar">
+          <t-button variant="outline" theme="default" class="scope-open-btn" @click="ragScopeVisible = true">
+            <t-icon name="folder-open" />
+            {{ selectedScopeBadges.length ? '已指定资料' : '资料范围' }}
+          </t-button>
+          <div class="scope-chip-list">
+            <span v-for="badge in selectedScopeBadges" :key="badge.key" class="scope-chip">
+              {{ badge.text }}
+              <button type="button" aria-label="移除" @click.stop="removeSelectedScopeBadge(badge)">×</button>
+            </span>
+            <span v-if="selectedScopeBadges.length === 0" class="scope-placeholder">未指定时使用默认知识库范围</span>
+          </div>
         </div>
         <div class="input-wrapper">
           <t-textarea v-model="inputValue" placeholder="输入消息... (Cmd/Ctrl + Enter 发送, Enter 换行)" :autosize="{ minRows: 1, maxRows: 5 }" @keydown="handleKeyDown" />
@@ -166,6 +167,95 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div v-if="ragScopeVisible" class="scope-modal-mask" @click.self="ragScopeVisible = false">
+      <section class="scope-modal">
+        <header class="scope-modal-header">
+          <div>
+            <h2>资料范围</h2>
+            <p>按知识库、标签和文件限定本轮 RAG 检索范围</p>
+          </div>
+          <button type="button" aria-label="关闭" @click="ragScopeVisible = false">×</button>
+        </header>
+        <div class="scope-modal-body">
+          <aside class="scope-library-sidebar">
+            <div class="scope-search">
+              <t-input v-model="kbSearchKeyword" placeholder="搜索知识库" clearable @enter="searchKnowledgeBases" @clear="searchKnowledgeBases" />
+            </div>
+            <div v-if="kbLoading" class="scope-loading">知识库加载中…</div>
+            <template v-for="kb in kbOptions" :key="kb.id">
+              <button
+                type="button"
+                class="library-row"
+                :class="{ active: activeKb?.id === kb.id, selected: isKbSelected(kb.id) }"
+                @click="activateKb(kb.id)"
+              >
+                <label class="library-check" @click.stop>
+                  <input type="checkbox" :checked="isKbSelected(kb.id)" @change="toggleKb(kb)" />
+                </label>
+                <span class="library-name">{{ kb.name }}</span>
+                <span class="kb-option-tag" :class="`kb-cat-${kb.category || 'unknown'}`">{{ kbCategoryLabel(kb.category) }}</span>
+              </button>
+              <div v-if="isKbSelected(kb.id) || activeKb?.id === kb.id" class="library-tag-tree">
+                <label class="tree-check all-tag">
+                  <input type="checkbox" :checked="isWholeKbSelected(kb.id)" @change="toggleWholeKb(kb)" />
+                  <span>全部</span>
+                </label>
+                <label v-for="tag in tagsForKb(kb.id)" :key="tag.id" class="tree-check">
+                  <input type="checkbox" :checked="isTagSelected(tag.id)" @change="toggleTag(tag)" />
+                  <span>{{ tag.name }}</span>
+                </label>
+                <div v-if="!tagLoading && tagsForKb(kb.id).length === 0" class="tree-empty">暂无标签</div>
+              </div>
+            </template>
+          </aside>
+          <main class="scope-detail">
+            <template v-if="activeKb">
+              <div class="scope-detail-head">
+                <div>
+                  <h3>{{ activeKb.name }}</h3>
+                  <p>选择标签可限定召回范围；选择文件会精确限定到文档。</p>
+                </div>
+                <t-button size="small" variant="outline" @click="toggleActiveWholeKb">
+                  {{ isWholeKbSelected(activeKb.id) ? '取消全部' : '选择全部' }}
+                </t-button>
+              </div>
+              <section class="scope-detail-section">
+                <div class="file-section-head">
+                  <h4>文件</h4>
+                  <t-input v-model="scopeSearchKeyword" size="small" clearable :placeholder="`搜索 ${activeKb.name} 的标签和文件`" class="file-search" />
+                </div>
+                <div v-if="tagLoading || fileLoading" class="scope-loading">
+                  {{ tagLoading ? '标签加载中…' : '文件加载中…' }}
+                </div>
+                <div class="file-list">
+                  <label v-for="file in activeFiles" :key="file.id" class="file-item">
+                    <input type="checkbox" :checked="isFileSelected(file.id)" @change="toggleFile(file)" />
+                    <t-icon name="file" />
+                    <span>{{ file.title || file.file_name }}</span>
+                  </label>
+                  <div v-if="!fileLoading && activeFiles.length === 0" class="scope-empty">当前范围暂无匹配文件</div>
+                  <div v-if="fileLoading" class="scope-loading">文件加载中…</div>
+                </div>
+              </section>
+            </template>
+            <div v-else class="scope-empty-panel">暂无知识库</div>
+          </main>
+        </div>
+        <footer class="scope-modal-footer">
+          <div class="scope-chip-list modal-chips">
+            <span v-for="badge in selectedScopeBadges" :key="badge.key" class="scope-chip">
+              {{ badge.text }}
+              <button type="button" aria-label="移除" @click.stop="removeSelectedScopeBadge(badge)">×</button>
+            </span>
+          </div>
+          <div class="scope-modal-actions">
+            <t-button variant="outline" @click="clearScope">清空</t-button>
+            <t-button theme="primary" @click="ragScopeVisible = false">确认</t-button>
+          </div>
+        </footer>
+      </section>
     </div>
 
     <ReferenceDrawer
@@ -217,17 +307,31 @@ import ReferenceDrawer from './components/ReferenceDrawer.vue'
 // === Composables 组装 ===
 const rag = useRag()
 const {
-  ragState, kbOptions, tagOptions, fileOptions,
+  kbOptions, scopeSearchKeyword,
+  activeKb, activeFiles, selectedScopeBadges,
   kbLoading, tagLoading, fileLoading, agentUsesRag,
-  filterFileLocal, selectPopupProps,
-  onKbSearch, onKbChange, onFileSearch, kbCategoryLabel,
+  activateKb, onKbSearch, toggleKb, toggleWholeKb, toggleTag, toggleFile,
+  isKbSelected, isTagSelected, isFileSelected,
+  tagsForKb, isWholeKbSelected,
+  clearScope, removeSelectedScopeBadge, kbCategoryLabel,
 } = rag
+const ragScopeVisible = ref(false)
+const kbSearchKeyword = ref('')
+
+function searchKnowledgeBases() {
+  onKbSearch(kbSearchKeyword.value)
+}
+
+function toggleActiveWholeKb() {
+  if (activeKb.value) toggleWholeKb(activeKb.value)
+}
 
 const chat = useChat({
   getRagChanged: rag.getRagChanged,
   markRagSynced: rag.markRagSynced,
-  resetRagHash: rag.resetRagHash,
-  ragState,
+  resetRagFingerprint: rag.resetRagFingerprint,
+  getRagPayload: rag.getRagPayload,
+  hasRagScope: rag.hasRagScope,
   detectAgentRagDeps: rag.detectAgentRagDeps,
 })
 const {
@@ -396,9 +500,13 @@ onMounted(async () => {
 .chat-main { flex: 1; display: flex; flex-direction: column; background: #fafafa; }
 .agent-selector { padding: 16px; background: #fff; border-bottom: 1px solid #e7e7e7; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 .run-mode-toggle { display: inline-flex; gap: 6px; flex-shrink: 0; }
-.rag-selector-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; max-width: 900px; margin: 0 auto 12px auto; }
-.kb-option { display: inline-flex; align-items: center; gap: 8px; }
-.kb-option-name { color: #333; }
+.rag-scope-bar { display: flex; gap: 12px; align-items: center; max-width: 900px; margin: 0 auto 12px auto; }
+.scope-open-btn { flex-shrink: 0; }
+.scope-chip-list { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.scope-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 280px; padding: 4px 8px; border: 1px solid #d9e8ff; border-radius: 6px; background: #f5f9ff; color: #1f4e8c; font-size: 12px; line-height: 18px; }
+.scope-chip button { border: 0; background: transparent; color: #6b7280; cursor: pointer; padding: 0 2px; font-size: 14px; line-height: 1; }
+.scope-chip button:hover { color: #e34d59; }
+.scope-placeholder { color: #999; font-size: 13px; }
 .kb-option-tag { font-size: 11px; padding: 1px 6px; border-radius: 3px; line-height: 16px; flex-shrink: 0; }
 .kb-cat-personal { color: #0052d9; background: #e8efff; }
 .kb-cat-enterprise, .kb-cat-owner { color: #ed7b2f; background: #fff3e6; }
@@ -451,7 +559,47 @@ onMounted(async () => {
 @media (max-width: 720px) {
   .input-wrapper { flex-direction: column; align-items: stretch; }
   .input-actions { justify-content: flex-end; }
+  .rag-scope-bar { align-items: flex-start; flex-direction: column; }
 }
+
+.scope-modal-mask { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 32px; background: rgba(15, 23, 42, 0.42); }
+.scope-modal { width: min(960px, 100%); max-height: min(760px, calc(100vh - 64px)); display: flex; flex-direction: column; background: #fff; border-radius: 8px; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.24); overflow: hidden; }
+.scope-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid #e7e7e7; }
+.scope-modal-header h2 { margin: 0; font-size: 18px; color: #1f2937; }
+.scope-modal-header p { margin: 4px 0 0; font-size: 12px; color: #6b7280; }
+.scope-modal-header > button { width: 30px; height: 30px; border: 0; border-radius: 6px; background: #f3f4f6; color: #4b5563; cursor: pointer; font-size: 18px; }
+.scope-modal-body { display: grid; grid-template-columns: 320px 1fr; min-height: 460px; overflow: hidden; }
+.scope-library-sidebar { padding: 14px; border-right: 1px solid #e7e7e7; background: #fafafa; overflow-y: auto; }
+.scope-search { margin-bottom: 12px; }
+.library-row { width: 100%; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
+.library-row:hover { background: #f1f5ff; }
+.library-row.active { border-color: #b5c7ee; background: #eef5ff; }
+.library-row.selected .library-name { color: #0052d9; font-weight: 600; }
+.library-check { display: flex; align-items: center; justify-content: center; }
+.library-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #374151; font-size: 13px; }
+.library-tag-tree { margin: 2px 0 10px 28px; padding-left: 10px; border-left: 1px solid #e1e7f0; display: grid; gap: 7px; }
+.tree-check { min-width: 0; display: flex; align-items: center; gap: 7px; color: #374151; font-size: 12px; line-height: 1.35; cursor: pointer; }
+.tree-check input { width: 14px; height: 14px; accent-color: #0052d9; flex-shrink: 0; }
+.tree-check span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-check.all-tag { color: #0052d9; font-weight: 700; }
+.tree-empty { padding: 2px 0 4px; color: #9ca3af; font-size: 12px; }
+.scope-detail { min-width: 0; padding: 18px; overflow-y: auto; background: #fff; }
+.scope-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.scope-detail-head h3 { margin: 0; font-size: 17px; color: #111827; }
+.scope-detail-head p { margin: 4px 0 0; font-size: 12px; color: #6b7280; }
+.scope-detail-section { margin-top: 16px; }
+.scope-detail-section h4, .file-section-head h4 { margin: 0 0 10px; font-size: 14px; color: #374151; }
+.file-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.file-search { width: 240px; }
+.file-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.file-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 9px 10px; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; color: #374151; font-size: 13px; cursor: pointer; }
+.file-item:hover { border-color: #b5c7ee; background: #f8fbff; }
+.file-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope-loading, .scope-empty, .scope-empty-panel { color: #9ca3af; font-size: 13px; padding: 12px 0; }
+.scope-empty-panel { display: flex; height: 100%; align-items: center; justify-content: center; }
+.scope-modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-top: 1px solid #e7e7e7; background: #fafafa; }
+.modal-chips { flex: 1; max-height: 72px; overflow-y: auto; }
+.scope-modal-actions { display: flex; gap: 10px; flex-shrink: 0; }
 
 /* 编号徽章（正文中的引用号） */
 .message-content :deep(.ref-badge) {

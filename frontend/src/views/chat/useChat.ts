@@ -20,10 +20,11 @@ export type RunMode = 'flash' | 'pro'
 
 export interface UseChatOptions {
     /** RAG composable 提供的增量同步方法 */
-    getRagChanged: () => { changed: boolean; hash: string }
-    markRagSynced: (hash: string) => void
-    resetRagHash: () => void
-    ragState: { knowledge_base_ids: string[]; tag_ids: string[]; file_ids: string[] }
+    getRagChanged: () => { changed: boolean; fingerprint: string }
+    markRagSynced: (fingerprint: string) => void
+    resetRagFingerprint: () => void
+    getRagPayload: () => Record<string, any>
+    hasRagScope: () => boolean
     detectAgentRagDeps: (agentId: string) => Promise<void>
 }
 
@@ -91,7 +92,7 @@ export function useChat(opts: UseChatOptions) {
             }
             agentSessionId.value = res.data.chat?.agent_session_id || ''
             lastActiveChatId.value = chatId
-            opts.resetRagHash()
+            opts.resetRagFingerprint()
             scrollToBottom()
         } catch (err) {
             console.error('Failed to load chat detail:', err)
@@ -105,7 +106,7 @@ export function useChat(opts: UseChatOptions) {
         const res = await createChat(agentId, '')
         const newId = res.data.id
         agentSessionId.value = ''
-        opts.resetRagHash()
+        opts.resetRagFingerprint()
         await router.push(`/chat/${newId}`)
         await loadChats()
         return newId
@@ -175,7 +176,7 @@ export function useChat(opts: UseChatOptions) {
         try {
             abortController.value = new AbortController()
 
-            const { changed: ragChanged, hash: currentRagHash } = opts.getRagChanged()
+            const { changed: ragChanged, fingerprint: currentRagFingerprint } = opts.getRagChanged()
 
             const body: any = {
                 agent_id: selectedAgent.value,
@@ -189,15 +190,11 @@ export function useChat(opts: UseChatOptions) {
                     ...(extraContext || {}),
                 },
             }
-            if (ragChanged) {
+            const shouldSendRagState = ragChanged || opts.hasRagScope()
+            if (shouldSendRagState) {
                 body.context = {
                     ...body.context,
-                    rag_state: {
-                        knowledge_base_ids: opts.ragState.knowledge_base_ids,
-                        tag_ids: opts.ragState.tag_ids,
-                        file_ids: opts.ragState.file_ids,
-                        hash: currentRagHash,
-                    },
+                    rag_state: opts.getRagPayload(),
                 }
             }
 
@@ -209,7 +206,7 @@ export function useChat(opts: UseChatOptions) {
             })
 
             if (!response.ok) throw new Error(`HTTP ${response.status}`)
-            if (ragChanged) opts.markRagSynced(currentRagHash)
+            if (shouldSendRagState) opts.markRagSynced(currentRagFingerprint)
             const reader = response.body?.getReader()
             if (!reader) throw new Error('No response body')
 

@@ -192,6 +192,7 @@ class RAGService:
                    COALESCE(file_name, '') AS file_name,
                    COALESCE(file_type, '') AS file_type,
                    id_knowledge_base AS knowledge_base_id,
+                   COALESCE(tag_id, '') AS tag_id,
                    created_at
             FROM knowledge
             WHERE {" AND ".join(conds)}

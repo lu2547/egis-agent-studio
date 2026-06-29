@@ -97,6 +97,7 @@ class File(BaseModel):
     file_name: str = ""
     file_type: str = ""
     knowledge_base_id: str
+    tag_id: str = ""
     created_at: datetime
 
 
